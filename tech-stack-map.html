@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mahi Sharma — Tech Stack Map</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh}
+  header{text-align:center;padding:32px 16px 8px;background:linear-gradient(135deg,#161b22 0%,#0d1117 100%)}
+  header h1{font-size:1.8rem;font-weight:700;background:linear-gradient(90deg,#58a6ff,#3fb950,#f0883e);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  header p{color:#8b949e;margin-top:6px;font-size:.95rem}
+  .legend{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;padding:16px 16px 8px}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:.82rem;color:#8b949e}
+  .legend-dot{width:12px;height:12px;border-radius:50%}
+  #graph-container{width:100%;height:620px;position:relative;overflow:hidden}
+  svg{width:100%;height:100%}
+  .link{stroke-opacity:.35}
+  .node-label{font-size:11px;pointer-events:none;text-anchor:middle;fill:#c9d1d9;font-weight:500}
+  .project-label{font-size:13px;font-weight:700;fill:#e6edf3;pointer-events:none;text-anchor:middle}
+
+  .tooltip{position:absolute;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px 16px;pointer-events:none;opacity:0;transition:opacity .15s;font-size:.82rem;max-width:300px;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+  .tooltip h4{color:#e6edf3;margin-bottom:6px;font-size:.9rem}
+  .tooltip .cat-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:600;margin-bottom:6px}
+  .tooltip ul{list-style:none;padding:0}
+  .tooltip li{color:#8b949e;padding:2px 0;font-size:.8rem}
+  .tooltip li::before{content:'→ ';color:#58a6ff}
+
+  #table-section{max-width:900px;margin:24px auto;padding:0 16px 48px}
+  #table-section h2{font-size:1.2rem;margin-bottom:16px;color:#e6edf3}
+  table{width:100%;border-collapse:collapse;background:#161b22;border-radius:8px;overflow:hidden}
+  thead{background:#21262d}
+  th{text-align:left;padding:12px 16px;font-size:.8rem;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+  td{padding:10px 16px;border-top:1px solid #21262d;font-size:.88rem}
+  tr:hover td{background:#1c2128}
+  .bar-cell{position:relative;width:200px}
+  .bar{height:22px;border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:.75rem;font-weight:600;color:#fff;min-width:24px;transition:width .4s ease}
+  .cat-pill{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.75rem;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mahi Sharma — Tech Stack Map</h1>
+  <p>Interactive dependency graph across 5 data-science projects + resume skills</p>
+</header>
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>Data Processing</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div>ML / AI</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f0883e"></div>Visualization</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#bc8cff"></div>Languages</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#768390"></div>Tools &amp; Databases</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#e6edf3;border:2px solid #30363d"></div>Project (centre)</div>
+</div>
+<div id="graph-container">
+  <div class="tooltip" id="tip"></div>
+</div>
+<div id="table-section">
+  <h2>Summary — Libraries &amp; Tools by Usage</h2>
+  <table><thead><tr><th>Library / Tool</th><th>Category</th><th>Used In (# projects)</th><th style="width:220px">Coverage</th></tr></thead><tbody id="tbl"></tbody></table>
+</div>
+
+<script>
+/* ── data ─────────────────────────────────────────────────── */
+const projects = [
+  {id:'drift',    label:'Data Drift\nMonitoring',   libs:['pandas','numpy','scipy','seaborn','matplotlib','streamlit']},
+  {id:'diabetes', label:'Diabetes\nPrediction',     libs:['pandas','numpy','matplotlib','seaborn','scikit-learn']},
+  {id:'fraud',    label:'Fraud\nDetection',         libs:['pandas','numpy','matplotlib','seaborn','scikit-learn','xgboost','imbalanced-learn']},
+  {id:'spotify',  label:'Spotify\nPopularity',      libs:['pandas','numpy','scikit-learn','scipy']},
+  {id:'health',   label:'Healthcare\nAnalysis',     libs:['pandas','numpy','matplotlib','seaborn','scikit-learn']}
+];
+
+const CAT = {
+  'Data Processing': '#58a6ff',
+  'ML / AI':         '#3fb950',
+  'Visualization':   '#f0883e',
+  'Languages':       '#bc8cff',
+  'Tools & Databases':'#768390'
+};
+
+const libMeta = {
+  'pandas':           {cat:'Data Processing'},
+  'numpy':            {cat:'Data Processing'},
+  'scipy':            {cat:'Data Processing'},
+  'SQL':              {cat:'Data Processing'},
+  'scikit-learn':     {cat:'ML / AI'},
+  'xgboost':          {cat:'ML / AI'},
+  'imbalanced-learn': {cat:'ML / AI'},
+  'matplotlib':       {cat:'Visualization'},
+  'seaborn':          {cat:'Visualization'},
+  'streamlit':        {cat:'Visualization'},
+  'Python':           {cat:'Languages'},
+  'Java':             {cat:'Languages'},
+  'C':                {cat:'Languages'},
+  'MySQL':            {cat:'Tools & Databases'},
+  'Excel':            {cat:'Tools & Databases'},
+  'Git':              {cat:'Tools & Databases'},
+  'GitHub':           {cat:'Tools & Databases'},
+  'VS Code':          {cat:'Tools & Databases'},
+  'Jupyter Notebook': {cat:'Tools & Databases'}
+};
+
+// resume-only items (not detected in repos but on resume)
+const resumeOnly = ['SQL','Python','Java','C','MySQL','Excel','Git','GitHub','VS Code','Jupyter Notebook'];
+
+// build usage map
+const usage = {};
+Object.keys(libMeta).forEach(l => usage[l] = []);
+projects.forEach(p => p.libs.forEach(l => { if(!usage[l]) usage[l]=[]; usage[l].push(p.id); }));
+resumeOnly.forEach(l => { if(!usage[l]) usage[l]=[]; });
+
+/* ── graph data ──────────────────────────────────────────── */
+const nodes = [];
+const links = [];
+
+projects.forEach(p => {
+  nodes.push({id:p.id, label:p.label, type:'project', r:30});
+});
+
+Object.keys(libMeta).forEach(lib => {
+  const count = usage[lib].length;
+  nodes.push({id:lib, label:lib, type:'lib', cat:libMeta[lib].cat, count, r: 10 + count * 4});
+});
+
+projects.forEach(p => {
+  p.libs.forEach(lib => {
+    links.push({source:p.id, target:lib});
+  });
+});
+
+/* ── D3 force layout ─────────────────────────────────────── */
+const container = document.getElementById('graph-container');
+const W = container.clientWidth, H = container.clientHeight;
+
+const svg = d3.select('#graph-container').append('svg').attr('viewBox',`0 0 ${W} ${H}`);
+const g = svg.append('g');
+
+svg.call(d3.zoom().scaleExtent([.3,3]).on('zoom', e => g.attr('transform',e.transform)));
+
+const sim = d3.forceSimulation(nodes)
+  .force('link', d3.forceLink(links).id(d=>d.id).distance(d => {
+    const t = typeof d.target === 'object' ? d.target : nodes.find(n=>n.id===d.target);
+    return t && t.count>=4 ? 100 : 140;
+  }))
+  .force('charge', d3.forceManyBody().strength(-320))
+  .force('center', d3.forceCenter(W/2, H/2))
+  .force('collision', d3.forceCollide().radius(d=>d.r+12));
+
+// links
+const linkSel = g.selectAll('.link').data(links).enter().append('line')
+  .attr('class','link')
+  .attr('stroke', d => {
+    const tid = typeof d.target === 'object' ? d.target.id : d.target;
+    const t = nodes.find(n=>n.id===tid);
+    return t ? CAT[t.cat] || '#30363d' : '#30363d';
+  })
+  .attr('stroke-width', 1.5);
+
+// node groups
+const nodeSel = g.selectAll('.node').data(nodes).enter().append('g')
+  .attr('class','node')
+  .call(d3.drag().on('start',dragStart).on('drag',dragged).on('end',dragEnd));
+
+// circles
+nodeSel.append('circle')
+  .attr('r', d=>d.r)
+  .attr('fill', d => d.type==='project' ? '#161b22' : CAT[d.cat]+'22')
+  .attr('stroke', d => d.type==='project' ? '#e6edf3' : CAT[d.cat])
+  .attr('stroke-width', d => d.type==='project' ? 2.5 : 1.8)
+  .style('cursor','pointer');
+
+// glow for high-usage libs
+nodeSel.filter(d=>d.type==='lib'&&d.count>=4).select('circle')
+  .attr('fill', d => CAT[d.cat]+'44');
+
+// labels
+nodeSel.each(function(d){
+  const el = d3.select(this);
+  const lines = d.label.split('\n');
+  if(d.type==='project'){
+    lines.forEach((line,i) => {
+      el.append('text')
+        .attr('class','project-label')
+        .attr('dy', (i - (lines.length-1)/2) * 16 + 4)
+        .text(line);
+    });
+  } else {
+    el.append('text')
+      .attr('class','node-label')
+      .attr('dy', d.r + 14)
+      .text(d.label);
+  }
+});
+
+// count badge on lib nodes
+nodeSel.filter(d=>d.type==='lib'&&d.count>0).append('text')
+  .attr('text-anchor','middle').attr('dy',5)
+  .attr('fill','#fff').attr('font-size','11px').attr('font-weight','700')
+  .text(d=>d.count);
+
+/* tooltip */
+const tip = document.getElementById('tip');
+nodeSel.on('mouseover', (ev,d)=>{
+  if(d.type==='project'){
+    const p = projects.find(pr=>pr.id===d.id);
+    tip.innerHTML = `<h4>${d.label.replace(/\n/g,' ')}</h4><div style="color:#8b949e;margin-bottom:4px">${p.libs.length} libraries</div><ul>${p.libs.map(l=>`<li>${l}</li>`).join('')}</ul>`;
+  } else {
+    const projs = usage[d.id];
+    const pNames = projs.map(pid => projects.find(p=>p.id===pid)?.label.replace(/\n/g,' ') || pid);
+    tip.innerHTML = `<h4>${d.label}</h4><div class="cat-badge" style="background:${CAT[d.cat]}33;color:${CAT[d.cat]}">${d.cat}</div>`
+      + (projs.length ? `<ul>${pNames.map(n=>`<li>${n}</li>`).join('')}</ul>` : `<div style="color:#8b949e;margin-top:4px">Resume skill (not repo-specific)</div>`);
+  }
+  tip.style.opacity=1;
+}).on('mousemove', ev=>{
+  const rect = container.getBoundingClientRect();
+  tip.style.left = (ev.clientX - rect.left + 14)+'px';
+  tip.style.top  = (ev.clientY - rect.top - 10)+'px';
+}).on('mouseout', ()=>{ tip.style.opacity=0; });
+
+// highlight connected on hover
+nodeSel.on('mouseover.highlight', (ev,d)=>{
+  const connected = new Set();
+  connected.add(d.id);
+  links.forEach(l=>{
+    const s = typeof l.source==='object'?l.source.id:l.source;
+    const t = typeof l.target==='object'?l.target.id:l.target;
+    if(s===d.id) connected.add(t);
+    if(t===d.id) connected.add(s);
+  });
+  nodeSel.style('opacity', n=>connected.has(n.id)?1:.15);
+  linkSel.style('stroke-opacity', l=>{
+    const s = typeof l.source==='object'?l.source.id:l.source;
+    const t = typeof l.target==='object'?l.target.id:l.target;
+    return (s===d.id||t===d.id)?.7:.04;
+  }).attr('stroke-width', l=>{
+    const s = typeof l.source==='object'?l.source.id:l.source;
+    const t = typeof l.target==='object'?l.target.id:l.target;
+    return (s===d.id||t===d.id)?2.5:1.5;
+  });
+}).on('mouseout.highlight', ()=>{
+  nodeSel.style('opacity',1);
+  linkSel.style('stroke-opacity',.35).attr('stroke-width',1.5);
+});
+
+sim.on('tick', ()=>{
+  linkSel.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+  nodeSel.attr('transform',d=>`translate(${d.x},${d.y})`);
+});
+
+function dragStart(ev,d){if(!ev.active) sim.alphaTarget(.3).restart(); d.fx=d.x;d.fy=d.y;}
+function dragged(ev,d){d.fx=ev.x;d.fy=ev.y;}
+function dragEnd(ev,d){if(!ev.active) sim.alphaTarget(0); d.fx=null;d.fy=null;}
+
+/* ── summary table ───────────────────────────────────────── */
+const sorted = Object.entries(usage).map(([lib,projs])=>({lib,cat:libMeta[lib].cat,count:projs.length,projs}))
+  .sort((a,b)=>b.count-a.count || a.lib.localeCompare(b.lib));
+
+const tbody = document.getElementById('tbl');
+sorted.forEach(row=>{
+  const pct = (row.count/5*100);
+  const color = CAT[row.cat];
+  const projNames = row.projs.map(pid=>projects.find(p=>p.id===pid)?.label.replace(/\n/g,' ')||pid).join(', ');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td style="font-weight:600">${row.lib}</td>
+    <td><span class="cat-pill" style="background:${color}22;color:${color}">${row.cat}</span></td>
+    <td>${row.count} / 5${row.count?` <span style="color:#8b949e;font-size:.78rem">(${projNames})</span>`:` <span style="color:#8b949e;font-size:.78rem">Resume skill</span>`}</td>
+    <td class="bar-cell"><div class="bar" style="width:${Math.max(pct,12)}%;background:${color}">${row.count}</div></td>`;
+  tbody.appendChild(tr);
+});
+</script>
+</body>
+</html>
